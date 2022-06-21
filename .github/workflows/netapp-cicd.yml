@@ -260,7 +260,7 @@ jobs:
   buildnpush:
     name: Build and Push Docker Package
     #needs: [test, cross_compile, lint]
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/netapp-main'
     runs-on: ubuntu-latest
     env:
       USERNAME: ${{ secrets.JFROG_RESTIC_USERNAME }}
