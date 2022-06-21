@@ -21,16 +21,6 @@ jobs:
             test_fuse: true
             check_changelog: true
 
-          - job_name: Linux
-            go: 1.16.x
-            os: ubuntu-latest
-            test_fuse: true
-
-          - job_name: Linux
-            go: 1.15.x
-            os: ubuntu-latest
-            test_fuse: true
-
     name: ${{ matrix.job_name }} Go ${{ matrix.go }}
     runs-on: ${{ matrix.os }}
 
