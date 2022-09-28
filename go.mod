@@ -1,7 +1,6 @@
 module github.com/restic/restic
 
 replace (
-	github.com/form3tech-oss/jwt-go => github.com/golang-jwt/jwt/v4 v4.4.2
 	golang.org/x/text => golang.org/x/text v0.3.7
 	gopkg.in/yaml.v2 => gopkg.in/yaml.v2 v2.4.0
 )
@@ -19,7 +18,6 @@ require (
 	github.com/elithrar/simple-scrypt v1.3.0
 	github.com/go-ole/go-ole v1.2.5
 	github.com/gofrs/uuid v4.0.0+incompatible // indirect
-	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
 	github.com/google/go-cmp v0.5.6
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/juju/ratelimit v1.0.1
