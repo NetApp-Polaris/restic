@@ -259,7 +259,7 @@ func runForget(opts ForgetOptions, gopts GlobalOptions, args []string) error {
 
 	if opts.deleteEmptyRepo {
 		snapshotCount := 0
-		for range FindFilteredSnapshots(ctx, repo, opts.Hosts, opts.Tags, opts.Paths, []string{}) {
+		for range FindFilteredSnapshots(ctx, repo.Backend(),repo, opts.Hosts, opts.Tags, opts.Paths, []string{}) {
 			snapshotCount++
 		}
 

@@ -161,7 +161,6 @@ func (r *SFTP) mkdirAllDataSubdirs(ctx context.Context, nconn uint) error {
 	// on high-latency links.
 	g, _ := errgroup.WithContext(ctx)
 	// Use errgroup's built-in semaphore, because r.sem is not initialized yet.
-	g.SetLimit(int(nconn))
 
 	for _, d := range r.Paths() {
 		d := d

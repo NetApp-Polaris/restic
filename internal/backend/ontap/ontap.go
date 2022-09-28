@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"crypto/tls"
 	"fmt"
+	"github.com/restic/restic/internal/backend/sema"
 	"hash"
 	"io"
 	"net/http"
@@ -43,6 +44,7 @@ func (wr wrapReader) Close() error {
 type Backend struct {
 	client s3iface.S3API
 	cfg    Config
+	sem    sema.Semaphore
 	backend.Layout
 }
 
@@ -410,7 +412,8 @@ func Open(ctx context.Context, config Config) (*Backend, error) {
 
 	client := s3.New(newSession)
 
-	newBackend := NewBackend(client, config)
+	sem, _ := sema.New(1)
+	newBackend := NewBackend(client, sem,config)
 
 	layout, err := backend.ParseLayout(ctx, newBackend, "default", defaultLayout, config.Prefix)
 	if err != nil {
@@ -422,9 +425,11 @@ func Open(ctx context.Context, config Config) (*Backend, error) {
 	return newBackend, nil
 }
 
-func NewBackend(client s3iface.S3API,  config Config) *Backend {
+func NewBackend(client s3iface.S3API,sem sema.Semaphore, config Config) *Backend {
+
 	return &Backend{
 		client: client,
+		sem:    sem,
 		cfg:    config,
 	}
 }
