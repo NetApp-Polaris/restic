@@ -1,3 +1,4 @@
+//go:build debug || profile
 // +build debug profile
 
 package main
@@ -8,7 +9,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	"github.com/restic/restic/internal/errors"
 	"github.com/restic/restic/internal/repository"
 
 	"github.com/pkg/profile"
@@ -64,9 +64,9 @@ func runDebug() error {
 		profilesEnabled++
 	}
 
-	if profilesEnabled > 1 {
-		return errors.Fatal("only one profile (memory, CPU, trace, or block) may be activated at the same time")
-	}
+	// if profilesEnabled > 1 {
+	// 	return errors.Fatal("only one profile (memory, CPU, trace, or block) may be activated at the same time")
+	// }
 
 	var prof interface {
 		Stop()

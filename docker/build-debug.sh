@@ -10,5 +10,5 @@ docker build \
   --rm \
   --pull \
   --file docker/Dockerfile.debug \
-  --tag docker.repo.eng.netapp.com/akarlis/restic:netapp-0.13.1-debug \ # CHANGEME: whatever repo/tag you need
+  --tag docker.repo.eng.netapp.com/akarlis/restic:netapp-0.13.1-debug \
   .
