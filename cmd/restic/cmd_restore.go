@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -65,6 +67,10 @@ func init() {
 }
 
 func runRestore(ctx context.Context, opts RestoreOptions, gopts GlobalOptions, args []string) error {
+	go func() {
+		fmt.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	hasExcludes := len(opts.Exclude) > 0 || len(opts.InsensitiveExclude) > 0
 	hasIncludes := len(opts.Include) > 0 || len(opts.InsensitiveInclude) > 0
 
@@ -223,6 +229,9 @@ func runRestore(ctx context.Context, opts RestoreOptions, gopts GlobalOptions, a
 		Verbosef("finished verifying %d files in %s (took %s)\n", count, opts.Target,
 			time.Since(t0).Round(time.Millisecond))
 	}
+
+	fmt.Println("restic is done, check localhost:6060, Ctrl-C to stop")
+	time.Sleep(time.Hour * 10)
 
 	return nil
 }
