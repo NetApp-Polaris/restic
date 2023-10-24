@@ -187,8 +187,9 @@ func (node Node) restoreMetadata(path string) error {
 	if err := lchown(path, int(node.UID), int(node.GID)); err != nil {
 		// Like "cp -a" and "rsync -a" do, we only report lchown permission errors
 		// if we run as root.
-		if os.Geteuid() > 0 && os.IsPermission(err) {
-			debug.Log("not running as root, ignoring lchown permission error for %v: %v",
+		// netapp change, we remove check for root (ASTRACTL-29854)
+		if os.IsPermission(err) {
+			debug.Log("ignoring lchown permission error for %v: %v",
 				path, err)
 		} else {
 			firsterr = errors.WithStack(err)
