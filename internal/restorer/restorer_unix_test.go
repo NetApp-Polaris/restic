@@ -16,10 +16,9 @@ import (
 )
 
 func TestRestorerRestoreEmptyHardlinkedFileds(t *testing.T) {
-	repo, cleanup := repository.TestRepository(t)
-	defer cleanup()
+	repo := repository.TestRepository(t)
 
-	_, id := saveSnapshot(t, repo, Snapshot{
+	sn, _ := saveSnapshot(t, repo, Snapshot{
 		Nodes: map[string]Node{
 			"dirtest": Dir{
 				Nodes: map[string]Node{
@@ -30,20 +29,17 @@ func TestRestorerRestoreEmptyHardlinkedFileds(t *testing.T) {
 		},
 	})
 
-	res, err := NewRestorer(context.TODO(), repo, id, false)
-	rtest.OK(t, err)
+	res := NewRestorer(context.TODO(), repo, sn, false)
 
 	res.SelectFilter = func(item string, dstpath string, node *restic.Node) (selectedForRestore bool, childMayBeSelected bool) {
 		return true, true
 	}
 
-	tempdir, cleanup := rtest.TempDir(t)
-	defer cleanup()
-
+	tempdir := rtest.TempDir(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err = res.RestoreTo(ctx, tempdir)
+	err := res.RestoreTo(ctx, tempdir)
 	rtest.OK(t, err)
 
 	f1, err := os.Stat(filepath.Join(tempdir, "dirtest/file1"))

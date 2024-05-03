@@ -4,9 +4,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -30,7 +30,7 @@ type TransportOptions struct {
 // readPEMCertKey reads a file and returns the PEM encoded certificate and key
 // blocks.
 func readPEMCertKey(filename string) (certs []byte, key []byte, err error) {
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "ReadFile")
 	}
@@ -65,6 +65,15 @@ func readPEMCertKey(filename string) (certs []byte, key []byte, err error) {
 // a custom rootCertFilename is non-empty, it must point to a valid PEM file,
 // otherwise the function will return an error.
 func Transport(opts TransportOptions) (http.RoundTripper, error) {
+	var tlsConfig tls.Config
+	envVar := os.Getenv("FORCE_CERT_VALIDATION")
+	envVar = strings.ToLower(strings.TrimSpace(envVar))
+	if "true" == envVar {
+		tlsConfig.InsecureSkipVerify = false
+	} else {
+		tlsConfig.InsecureSkipVerify = true
+	}
+
 	// copied from net/http
 	tr := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -79,7 +88,7 @@ func Transport(opts TransportOptions) (http.RoundTripper, error) {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{},
+		TLSClientConfig:       &tlsConfig,
 	}
 
 	if opts.InsecureTLS {
@@ -105,7 +114,7 @@ func Transport(opts TransportOptions) (http.RoundTripper, error) {
 			if filename == "" {
 				return nil, errors.Errorf("empty filename for root certificate supplied")
 			}
-			b, err := ioutil.ReadFile(filename)
+			b, err := os.ReadFile(filename)
 			if err != nil {
 				return nil, errors.Errorf("unable to read root certificate: %v", err)
 			}

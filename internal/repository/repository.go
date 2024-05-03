@@ -19,6 +19,7 @@ import (
 	"github.com/restic/restic/internal/crypto"
 	"github.com/restic/restic/internal/debug"
 	"github.com/restic/restic/internal/errors"
+	"github.com/restic/restic/internal/index"
 	"github.com/restic/restic/internal/pack"
 	"github.com/restic/restic/internal/restic"
 	"github.com/restic/restic/internal/ui/progress"
@@ -34,12 +35,12 @@ const MaxPackSize = 128 * 1024 * 1024
 
 // Repository is used to access a repository in a backend.
 type Repository struct {
-	be      restic.Backend
-	cfg     restic.Config
-	key     *crypto.Key
-	keyName string
-	idx     *MasterIndex
-	Cache   *cache.Cache
+	be    restic.Backend
+	cfg   restic.Config
+	key   *crypto.Key
+	keyID restic.ID
+	idx   *index.MasterIndex
+	Cache *cache.Cache
 
 	opts Options
 
@@ -66,9 +67,10 @@ type CompressionMode uint
 
 // Constants for the different compression levels.
 const (
-	CompressionAuto CompressionMode = 0
-	CompressionOff  CompressionMode = 1
-	CompressionMax  CompressionMode = 2
+	CompressionAuto    CompressionMode = 0
+	CompressionOff     CompressionMode = 1
+	CompressionMax     CompressionMode = 2
+	CompressionInvalid CompressionMode = 3
 )
 
 // Set implements the method needed for pflag command flag parsing.
@@ -81,6 +83,7 @@ func (c *CompressionMode) Set(s string) error {
 	case "max":
 		*c = CompressionMax
 	default:
+		*c = CompressionInvalid
 		return fmt.Errorf("invalid compression mode %q, must be one of (auto|off|max)", s)
 	}
 
@@ -106,6 +109,10 @@ func (c *CompressionMode) Type() string {
 
 // New returns a new repository with backend be.
 func New(be restic.Backend, opts Options) (*Repository, error) {
+	if opts.Compression == CompressionInvalid {
+		return nil, errors.Fatalf("invalid compression mode")
+	}
+
 	if opts.PackSize == 0 {
 		opts.PackSize = DefaultPackSize
 	}
@@ -118,7 +125,7 @@ func New(be restic.Backend, opts Options) (*Repository, error) {
 	repo := &Repository{
 		be:   be,
 		opts: opts,
-		idx:  NewMasterIndex(),
+		idx:  index.NewMasterIndex(),
 	}
 
 	return repo, nil
@@ -134,7 +141,7 @@ func (r *Repository) DisableAutoIndexUpdate() {
 func (r *Repository) setConfig(cfg restic.Config) {
 	r.cfg = cfg
 	if r.cfg.Version >= 2 {
-		r.idx.markCompressed()
+		r.idx.MarkCompressed()
 	}
 }
 
@@ -163,12 +170,6 @@ func (r *Repository) SetDryRun() {
 	r.be = dryrun.New(r.be)
 }
 
-// PrefixLength returns the number of bytes required so that all prefixes of
-// all IDs of type t are unique.
-func (r *Repository) PrefixLength(ctx context.Context, t restic.FileType) (int, error) {
-	return restic.PrefixLength(ctx, r.be, t)
-}
-
 // LoadUnpacked loads and decrypts the file with the given type and ID, using
 // the supplied buffer (which must be empty). If the buffer is nil, a new
 // buffer will be allocated and returned.
@@ -183,7 +184,11 @@ func (r *Repository) LoadUnpacked(ctx context.Context, t restic.FileType, id res
 		id = restic.ID{}
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+
 	h := restic.Handle{Type: t, Name: id.String()}
+	retriedInvalidData := false
+	var dataErr error
 	err := r.be.Load(ctx, h, 0, 0, func(rd io.Reader) error {
 		// make sure this call is idempotent, in case an error occurs
 		wr := bytes.NewBuffer(buf[:0])
@@ -192,15 +197,28 @@ func (r *Repository) LoadUnpacked(ctx context.Context, t restic.FileType, id res
 			return cerr
 		}
 		buf = wr.Bytes()
+
+		if t != restic.ConfigFile && !restic.Hash(buf).Equal(id) {
+			debug.Log("retry loading broken blob %v", h)
+			if !retriedInvalidData {
+				retriedInvalidData = true
+			} else {
+				// with a canceled context there is not guarantee which error will
+				// be returned by `be.Load`.
+				dataErr = fmt.Errorf("load(%v): %w", h, restic.ErrInvalidData)
+				cancel()
+			}
+			return restic.ErrInvalidData
+
+		}
 		return nil
 	})
 
+	if dataErr != nil {
+		return nil, dataErr
+	}
 	if err != nil {
 		return nil, err
-	}
-
-	if t != restic.ConfigFile && !restic.Hash(buf).Equal(id) {
-		return nil, errors.Errorf("load %v: invalid data returned", h)
 	}
 
 	nonce, ciphertext := buf[:r.key.NonceSize()], buf[r.key.NonceSize():]
@@ -268,12 +286,7 @@ func (r *Repository) LoadBlob(ctx context.Context, t restic.BlobType, id restic.
 		}
 
 		// load blob from pack
-		bt := t
-		if r.idx.IsMixedPack(blob.PackID) {
-			bt = restic.InvalidBlob
-		}
-		h := restic.Handle{Type: restic.PackFile,
-			Name: blob.PackID.String(), ContainedBlobType: bt}
+		h := restic.Handle{Type: restic.PackFile, Name: blob.PackID.String(), ContainedBlobType: t}
 
 		switch {
 		case cap(buf) < int(blob.Length):
@@ -565,8 +578,8 @@ func (r *Repository) Index() restic.MasterIndex {
 
 // SetIndex instructs the repository to use the given index.
 func (r *Repository) SetIndex(i restic.MasterIndex) error {
-	r.idx = i.(*MasterIndex)
-	return r.PrepareCache()
+	r.idx = i.(*index.MasterIndex)
+	return r.prepareCache()
 }
 
 // LoadIndex loads all index files from the backend in parallel and stores them
@@ -574,7 +587,7 @@ func (r *Repository) SetIndex(i restic.MasterIndex) error {
 func (r *Repository) LoadIndex(ctx context.Context) error {
 	debug.Log("Loading index")
 
-	err := ForAllIndexes(ctx, r, func(id restic.ID, idx *Index, oldFormat bool, err error) error {
+	err := index.ForAllIndexes(ctx, r, func(id restic.ID, idx *index.Index, oldFormat bool, err error) error {
 		if err != nil {
 			return err
 		}
@@ -608,7 +621,7 @@ func (r *Repository) LoadIndex(ctx context.Context) error {
 	}
 
 	// remove index files from the cache which have been removed in the repo
-	return r.PrepareCache()
+	return r.prepareCache()
 }
 
 // CreateIndexFromPacks creates a new index by reading all given pack files (with sizes).
@@ -674,9 +687,9 @@ func (r *Repository) CreateIndexFromPacks(ctx context.Context, packsize map[rest
 	return invalid, nil
 }
 
-// PrepareCache initializes the local cache. indexIDs is the list of IDs of
+// prepareCache initializes the local cache. indexIDs is the list of IDs of
 // index files still present in the repo.
-func (r *Repository) PrepareCache() error {
+func (r *Repository) prepareCache() error {
 	if r.Cache == nil {
 		return nil
 	}
@@ -710,10 +723,10 @@ func (r *Repository) SearchKey(ctx context.Context, password string, maxKeys int
 	}
 
 	r.key = key.master
-	r.keyName = key.Name()
+	r.keyID = key.ID()
 	cfg, err := restic.LoadConfig(ctx, r)
 	if err == crypto.ErrUnauthenticated {
-		return errors.Fatalf("config or key %v is damaged: %v", key.Name(), err)
+		return errors.Fatalf("config or key %v is damaged: %v", key.ID(), err)
 	} else if err != nil {
 		return errors.Fatalf("config cannot be loaded: %v", err)
 	}
@@ -724,32 +737,41 @@ func (r *Repository) SearchKey(ctx context.Context, password string, maxKeys int
 
 // Init creates a new master key with the supplied password, initializes and
 // saves the repository config.
-func (r *Repository) Init(ctx context.Context, version uint, password string, chunkerPolynomial *chunker.Pol) error {
+func (r *Repository) Init(ctx context.Context, version uint, password string, chunkerPolynomial *chunker.Pol) (bool, error) {
 	if version > restic.MaxRepoVersion {
-		return fmt.Errorf("repository version %v too high", version)
+		return false, fmt.Errorf("repository version %v too high", version)
 	}
 
 	if version < restic.MinRepoVersion {
-		return fmt.Errorf("repository version %v too low", version)
+		return false, fmt.Errorf("repository version %v too low", version)
 	}
 
-	has, err := r.be.Test(ctx, restic.Handle{Type: restic.ConfigFile})
-	if err != nil {
-		return err
+	_, err := r.be.Stat(ctx, restic.Handle{Type: restic.ConfigFile})
+	if err != nil && !r.be.IsNotExist(err) {
+		return false, err
 	}
-	if has {
-		return errors.New("repository master key and config already initialized")
+
+	if err == nil {
+		fmt.Print("Repo already exists. Testing password.\n")
+		if err := r.SearchKey(ctx, password, 1, ""); err != nil {
+			return false, err
+		}
+		return false, r.be.List(ctx, restic.LockFile, func(_ restic.FileInfo) error { return nil })
 	}
 
 	cfg, err := restic.CreateConfig(version)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if chunkerPolynomial != nil {
 		cfg.ChunkerPolynomial = *chunkerPolynomial
 	}
 
-	return r.init(ctx, password, cfg)
+	if err := r.init(ctx, password, cfg); err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 // init creates a new master key with the supplied password and uses it to save
@@ -761,7 +783,7 @@ func (r *Repository) init(ctx context.Context, password string, cfg restic.Confi
 	}
 
 	r.key = key.master
-	r.keyName = key.Name()
+	r.keyID = key.ID()
 	r.setConfig(cfg)
 	return restic.SaveConfig(ctx, r, cfg)
 }
@@ -771,9 +793,9 @@ func (r *Repository) Key() *crypto.Key {
 	return r.key
 }
 
-// KeyName returns the name of the current key in the backend.
-func (r *Repository) KeyName() string {
-	return r.keyName
+// KeyID returns the id of the current key in the backend.
+func (r *Repository) KeyID() restic.ID {
+	return r.keyID
 }
 
 // List runs fn for all files of type t in the repo.
@@ -831,7 +853,7 @@ func (r *Repository) SaveBlob(ctx context.Context, t restic.BlobType, buf []byte
 	}
 
 	// first try to add to pending blobs; if not successful, this blob is already known
-	known = !r.idx.addPending(restic.BlobHandle{ID: newID, Type: t})
+	known = !r.idx.AddPending(restic.BlobHandle{ID: newID, Type: t})
 
 	// only save when needed or explicitly told
 	if !known || storeDuplicate {

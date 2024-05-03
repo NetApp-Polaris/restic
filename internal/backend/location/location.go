@@ -8,6 +8,7 @@ import (
 	"github.com/restic/restic/internal/backend/b2"
 	"github.com/restic/restic/internal/backend/gs"
 	"github.com/restic/restic/internal/backend/local"
+	"github.com/restic/restic/internal/backend/ontap"
 	"github.com/restic/restic/internal/backend/rclone"
 	"github.com/restic/restic/internal/backend/rest"
 	"github.com/restic/restic/internal/backend/s3"
@@ -41,6 +42,7 @@ var parsers = []parser{
 	{"swift", swift.ParseConfig, noPassword},
 	{"rest", rest.ParseConfig, rest.StripPassword},
 	{"rclone", rclone.ParseConfig, noPassword},
+	{ontap.ProtocolScheme, ontap.ParseConfig, noPassword},
 }
 
 // noPassword returns the repository location unchanged (there's no sensitive information there)
@@ -127,6 +129,6 @@ func StripPassword(s string) string {
 }
 
 func extractScheme(s string) string {
-	data := strings.SplitN(s, ":", 2)
-	return data[0]
+	scheme, _, _ := strings.Cut(s, ":")
+	return scheme
 }

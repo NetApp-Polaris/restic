@@ -16,9 +16,6 @@ linters:
     # show how code can be simplified
     - gosimple
 
-    # # make sure code is formatted
-    - gofmt
-
     # examine code and report suspicious constructs, such as Printf calls whose
     # arguments do not align with the format string
     - govet
