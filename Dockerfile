@@ -1,10 +1,10 @@
-FROM golang:1.19-alpine as builder
+FROM golang:1.23-alpine as builder
 ARG BUILD_DATETIME
 WORKDIR /src
 COPY . .
 RUN go run build.go
 
-FROM alpine:3.16
+FROM alpine:latest
 RUN adduser -S -s /sbin/nologin restic
 RUN apk add libcap
 WORKDIR /app
