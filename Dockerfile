@@ -4,7 +4,7 @@ WORKDIR /src
 COPY . .
 RUN go run build.go
 
-FROM alpine:latest
+FROM alpine:3.20
 RUN adduser -S -s /sbin/nologin restic
 RUN apk add libcap
 WORKDIR /app
