@@ -239,7 +239,6 @@ jobs:
         export VERSION=$(cat NETAPPVERSION).${{ steps.date.outputs.date }}
         echo "VERSION="$VERSION
         docker tag netapp-restic:latest netappdownloads.jfrog.io/oss-docker-restic-production/restic:$VERSION-beta
-        docker tag netapp-restic:latest netapp/restic:$VERSION-beta
         docker push netappdownloads.jfrog.io/oss-docker-restic-production/restic:$VERSION-beta
 #      - name: tag github
 #        id: github_tag
