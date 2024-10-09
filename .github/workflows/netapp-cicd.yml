@@ -4,13 +4,13 @@ on:
   # run tests on push to master, but not when other branches are pushed to
   push:
     branches:
-      - netapp-main
+    - netapp-main
 
   # run tests for all pull requests
   pull_request:
 
 env:
-  latest_go: "1.19.x"
+  latest_go: "1.23.x"
   GO111MODULE: on
 
 jobs:
@@ -20,11 +20,11 @@ jobs:
         # list of jobs to run:
         include:
 
-          - job_name: Linux (race)
-            go: 1.19.x
-            os: ubuntu-latest
-            test_fuse: true
-            check_changelog: true
+        - job_name: Linux (race)
+          go: 1.23.x
+          os: ubuntu-latest
+          test_fuse: true
+          check_changelog: true
 
     name: ${{ matrix.job_name }} Go ${{ matrix.go }}
     runs-on: ${{ matrix.os }}
@@ -33,142 +33,134 @@ jobs:
       GOPROXY: https://proxy.golang.org
 
     steps:
-      - name: Set up Go ${{ matrix.go }}
-        uses: actions/setup-go@v3
-        with:
-          go-version: ${{ matrix.go }}
+    - name: Set up Go ${{ matrix.go }}
+      uses: actions/setup-go@v3
+      with:
+        go-version: ${{ matrix.go }}
 
-      - name: Get programs (Linux/macOS)
-        run: |
-          echo "build Go tools"
-          go install github.com/restic/rest-server/cmd/rest-server@latest
+    - name: Get programs (Linux/macOS)
+      run: |
+        echo "build Go tools"
+        go install github.com/restic/rest-server/cmd/rest-server@latest
 
-          echo "install minio server"
-          mkdir $HOME/bin
-          if [ "$RUNNER_OS" == "macOS" ]; then
-            wget --no-verbose -O $HOME/bin/minio https://dl.minio.io/server/minio/release/darwin-amd64/minio
-          else
-            wget --no-verbose -O $HOME/bin/minio https://dl.minio.io/server/minio/release/linux-amd64/minio
-          fi
-          chmod 755 $HOME/bin/minio
+        echo "install minio server"
+        mkdir $HOME/bin
+        if [ "$RUNNER_OS" == "macOS" ]; then
+          wget --no-verbose -O $HOME/bin/minio https://dl.minio.io/server/minio/release/darwin-amd64/minio
+        else
+          wget --no-verbose -O $HOME/bin/minio https://dl.minio.io/server/minio/release/linux-amd64/minio
+        fi
+        chmod 755 $HOME/bin/minio
 
-          echo "install rclone"
-          if [ "$RUNNER_OS" == "macOS" ]; then
-            wget --no-verbose -O rclone.zip https://downloads.rclone.org/rclone-current-osx-amd64.zip
-          else
-            wget --no-verbose -O rclone.zip https://downloads.rclone.org/rclone-current-linux-amd64.zip
-          fi
-          unzip rclone.zip
-          cp rclone*/rclone $HOME/bin
-          chmod 755 $HOME/bin/rclone
-          rm -rf rclone*
+        echo "install rclone"
+        if [ "$RUNNER_OS" == "macOS" ]; then
+          wget --no-verbose -O rclone.zip https://downloads.rclone.org/rclone-current-osx-amd64.zip
+        else
+          wget --no-verbose -O rclone.zip https://downloads.rclone.org/rclone-current-linux-amd64.zip
+        fi
+        unzip rclone.zip
+        cp rclone*/rclone $HOME/bin
+        chmod 755 $HOME/bin/rclone
+        rm -rf rclone*
 
-          # add $HOME/bin to path ($GOBIN was already added to the path by setup-go@v3)
-          echo $HOME/bin >> $GITHUB_PATH
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macOS-latest'
+        # add $HOME/bin to path ($GOBIN was already added to the path by setup-go@v3)
+        echo $HOME/bin >> $GITHUB_PATH
+      if: matrix.os == 'ubuntu-latest' || matrix.os == 'macOS-latest'
 
-      - name: Get programs (Windows)
-        shell: powershell
-        run: |
-          $ProgressPreference = 'SilentlyContinue'
+    - name: Get programs (Windows)
+      shell: powershell
+      run: |
+        $ProgressPreference = 'SilentlyContinue'
 
-          echo "build Go tools"
-          go install github.com/restic/rest-server/...
+        echo "build Go tools"
+        go install github.com/restic/rest-server/...
 
-          echo "install minio server"
-          mkdir $Env:USERPROFILE/bin
-          Invoke-WebRequest https://dl.minio.io/server/minio/release/windows-amd64/minio.exe -OutFile $Env:USERPROFILE/bin/minio.exe
+        echo "install minio server"
+        mkdir $Env:USERPROFILE/bin
+        Invoke-WebRequest https://dl.minio.io/server/minio/release/windows-amd64/minio.exe -OutFile $Env:USERPROFILE/bin/minio.exe
 
-          echo "install rclone"
-          Invoke-WebRequest https://downloads.rclone.org/rclone-current-windows-amd64.zip -OutFile rclone.zip
+        echo "install rclone"
+        Invoke-WebRequest https://downloads.rclone.org/rclone-current-windows-amd64.zip -OutFile rclone.zip
 
-          unzip rclone.zip
-          copy rclone*/rclone.exe $Env:USERPROFILE/bin
+        unzip rclone.zip
+        copy rclone*/rclone.exe $Env:USERPROFILE/bin
 
-          # add $USERPROFILE/bin to path ($GOBIN was already added to the path by setup-go@v3)
-          echo $Env:USERPROFILE\bin >> $Env:GITHUB_PATH
+        # add $USERPROFILE/bin to path ($GOBIN was already added to the path by setup-go@v3)
+        echo $Env:USERPROFILE\bin >> $Env:GITHUB_PATH
 
-          echo "install tar"
-          cd $env:USERPROFILE
-          mkdir tar
-          cd tar
+        echo "install tar"
+        cd $env:USERPROFILE
+        mkdir tar
+        cd tar
 
-          # install exactly these versions of tar and the libraries, other combinations might not work!
+        # install exactly these versions of tar and the libraries, other combinations might not work!
 
-          Invoke-WebRequest https://github.com/restic/test-assets/raw/master/tar-1.13-1-bin.zip -OutFile tar.zip
-          unzip tar.zip
-          Invoke-WebRequest https://github.com/restic/test-assets/raw/master/libintl-0.11.5-2-bin.zip -OutFile libintl.zip
-          unzip libintl.zip
-          Invoke-WebRequest https://github.com/restic/test-assets/raw/master/libiconv-1.8-1-bin.zip -OutFile libiconv.zip
-          unzip libiconv.zip
+        Invoke-WebRequest https://github.com/restic/test-assets/raw/master/tar-1.13-1-bin.zip -OutFile tar.zip
+        unzip tar.zip
+        Invoke-WebRequest https://github.com/restic/test-assets/raw/master/libintl-0.11.5-2-bin.zip -OutFile libintl.zip
+        unzip libintl.zip
+        Invoke-WebRequest https://github.com/restic/test-assets/raw/master/libiconv-1.8-1-bin.zip -OutFile libiconv.zip
+        unzip libiconv.zip
 
-          # add $USERPROFILE/tar/bin to path
-          echo $Env:USERPROFILE\tar\bin >> $Env:GITHUB_PATH
-        if: matrix.os == 'windows-latest'
+        # add $USERPROFILE/tar/bin to path
+        echo $Env:USERPROFILE\tar\bin >> $Env:GITHUB_PATH
+      if: matrix.os == 'windows-latest'
 
-      - name: Check out code
-        uses: actions/checkout@v3
+    - name: Check out code
+      uses: actions/checkout@v3
 
-      - name: Build with build.go
-        run: |
-          go run build.go
+    - name: Build with build.go
+      run: |
+        go run build.go
 
-      - name: Run local Tests
-        env:
-          RESTIC_TEST_FUSE: ${{ matrix.test_fuse }}
-        run: |
-          go test -cover ${{matrix.test_opts}} ./...
+    - name: Run local Tests
+      env:
+        RESTIC_TEST_FUSE: ${{ matrix.test_fuse }}
+      run: |
+        go test -cover ${{matrix.test_opts}} ./...
 
-      - name: Test cloud backends
-        env:
-          RESTIC_TEST_S3_KEY: ${{ secrets.RESTIC_TEST_S3_KEY }}
-          RESTIC_TEST_S3_SECRET: ${{ secrets.RESTIC_TEST_S3_SECRET }}
-          RESTIC_TEST_S3_REPOSITORY: ${{ secrets.RESTIC_TEST_S3_REPOSITORY }}
-          RESTIC_TEST_AZURE_ACCOUNT_NAME: ${{ secrets.RESTIC_TEST_AZURE_ACCOUNT_NAME }}
-          RESTIC_TEST_AZURE_ACCOUNT_KEY: ${{ secrets.RESTIC_TEST_AZURE_ACCOUNT_KEY }}
-          RESTIC_TEST_AZURE_REPOSITORY: ${{ secrets.RESTIC_TEST_AZURE_REPOSITORY }}
-          RESTIC_TEST_B2_ACCOUNT_ID: ${{ secrets.RESTIC_TEST_B2_ACCOUNT_ID }}
-          RESTIC_TEST_B2_ACCOUNT_KEY: ${{ secrets.RESTIC_TEST_B2_ACCOUNT_KEY }}
-          RESTIC_TEST_B2_REPOSITORY: ${{ secrets.RESTIC_TEST_B2_REPOSITORY }}
-          RESTIC_TEST_GS_REPOSITORY: ${{ secrets.RESTIC_TEST_GS_REPOSITORY }}
-          RESTIC_TEST_GS_PROJECT_ID: ${{ secrets.RESTIC_TEST_GS_PROJECT_ID }}
-          GOOGLE_PROJECT_ID: ${{ secrets.RESTIC_TEST_GS_PROJECT_ID }}
-          RESTIC_TEST_GS_APPLICATION_CREDENTIALS_B64: ${{ secrets.RESTIC_TEST_GS_APPLICATION_CREDENTIALS_B64 }}
-          RESTIC_TEST_OS_AUTH_URL: ${{ secrets.RESTIC_TEST_OS_AUTH_URL }}
-          RESTIC_TEST_OS_TENANT_NAME: ${{ secrets.RESTIC_TEST_OS_TENANT_NAME }}
-          RESTIC_TEST_OS_USERNAME: ${{ secrets.RESTIC_TEST_OS_USERNAME }}
-          RESTIC_TEST_OS_PASSWORD: ${{ secrets.RESTIC_TEST_OS_PASSWORD }}
-          RESTIC_TEST_OS_REGION_NAME: ${{ secrets.RESTIC_TEST_OS_REGION_NAME }}
-          RESTIC_TEST_SWIFT: ${{ secrets.RESTIC_TEST_SWIFT }}
-          # fail if any of the following tests cannot be run
-          RESTIC_TEST_DISALLOW_SKIP: "restic/backend/rest.TestBackendREST,\
-            restic/backend/sftp.TestBackendSFTP,\
-            restic/backend/s3.TestBackendMinio,\
-            restic/backend/rclone.TestBackendRclone,\
-            restic/backend/s3.TestBackendS3,\
-            restic/backend/swift.TestBackendSwift,\
-            restic/backend/b2.TestBackendB2,\
-            restic/backend/gs.TestBackendGS,\
-            restic/backend/azure.TestBackendAzure"
-        run: |
-          # prepare credentials for Google Cloud Storage tests in a temp file
-          export GOOGLE_APPLICATION_CREDENTIALS=$(mktemp --tmpdir restic-gcs-auth-XXXXXXX)
-          echo $RESTIC_TEST_GS_APPLICATION_CREDENTIALS_B64 | base64 -d > $GOOGLE_APPLICATION_CREDENTIALS
-          go test -cover -parallel 4 ./internal/backend/...
+    - name: Test cloud backends
+      env:
+        RESTIC_TEST_S3_KEY: ${{ secrets.RESTIC_TEST_S3_KEY }}
+        RESTIC_TEST_S3_SECRET: ${{ secrets.RESTIC_TEST_S3_SECRET }}
+        RESTIC_TEST_S3_REPOSITORY: ${{ secrets.RESTIC_TEST_S3_REPOSITORY }}
+        RESTIC_TEST_AZURE_ACCOUNT_NAME: ${{ secrets.RESTIC_TEST_AZURE_ACCOUNT_NAME }}
+        RESTIC_TEST_AZURE_ACCOUNT_KEY: ${{ secrets.RESTIC_TEST_AZURE_ACCOUNT_KEY }}
+        RESTIC_TEST_AZURE_REPOSITORY: ${{ secrets.RESTIC_TEST_AZURE_REPOSITORY }}
+        RESTIC_TEST_B2_ACCOUNT_ID: ${{ secrets.RESTIC_TEST_B2_ACCOUNT_ID }}
+        RESTIC_TEST_B2_ACCOUNT_KEY: ${{ secrets.RESTIC_TEST_B2_ACCOUNT_KEY }}
+        RESTIC_TEST_B2_REPOSITORY: ${{ secrets.RESTIC_TEST_B2_REPOSITORY }}
+        RESTIC_TEST_GS_REPOSITORY: ${{ secrets.RESTIC_TEST_GS_REPOSITORY }}
+        RESTIC_TEST_GS_PROJECT_ID: ${{ secrets.RESTIC_TEST_GS_PROJECT_ID }}
+        GOOGLE_PROJECT_ID: ${{ secrets.RESTIC_TEST_GS_PROJECT_ID }}
+        RESTIC_TEST_GS_APPLICATION_CREDENTIALS_B64: ${{ secrets.RESTIC_TEST_GS_APPLICATION_CREDENTIALS_B64 }}
+        RESTIC_TEST_OS_AUTH_URL: ${{ secrets.RESTIC_TEST_OS_AUTH_URL }}
+        RESTIC_TEST_OS_TENANT_NAME: ${{ secrets.RESTIC_TEST_OS_TENANT_NAME }}
+        RESTIC_TEST_OS_USERNAME: ${{ secrets.RESTIC_TEST_OS_USERNAME }}
+        RESTIC_TEST_OS_PASSWORD: ${{ secrets.RESTIC_TEST_OS_PASSWORD }}
+        RESTIC_TEST_OS_REGION_NAME: ${{ secrets.RESTIC_TEST_OS_REGION_NAME }}
+        RESTIC_TEST_SWIFT: ${{ secrets.RESTIC_TEST_SWIFT }}
+        # fail if any of the following tests cannot be run
+        RESTIC_TEST_DISALLOW_SKIP: "restic/backend/rest.TestBackendREST,restic/backend/sftp.TestBackendSFTP,restic/backend/s3.TestBackendMinio,restic/backend/rclone.TestBackendRclone,restic/backend/s3.TestBackendS3,restic/backend/swift.TestBackendSwift,restic/backend/b2.TestBackendB2,restic/backend/gs.TestBackendGS,restic/backend/azure.TestBackendAzure"
+      run: |
+        # prepare credentials for Google Cloud Storage tests in a temp file
+        export GOOGLE_APPLICATION_CREDENTIALS=$(mktemp --tmpdir restic-gcs-auth-XXXXXXX)
+        echo $RESTIC_TEST_GS_APPLICATION_CREDENTIALS_B64 | base64 -d > $GOOGLE_APPLICATION_CREDENTIALS
+        go test -cover -parallel 4 ./internal/backend/...
 
-        # only run cloud backend tests for pull requests from and pushes to our
-        # own repo, otherwise the secrets are not available
-        #if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && matrix.test_cloud_backends
-        if: ${{ false }}  # disable this step
+      # only run cloud backend tests for pull requests from and pushes to our
+      # own repo, otherwise the secrets are not available
+      #if: (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && matrix.test_cloud_backends
+      if: ${{ false }} # disable this step
 
-      - name: Check changelog files with calens
-        run: |
-          echo "install calens"
-          go install github.com/restic/calens@latest
+    - name: Check changelog files with calens
+      run: |
+        echo "install calens"
+        go install github.com/restic/calens@latest
 
-          echo "check changelog files"
-          calens
-        if: matrix.check_changelog
+        echo "check changelog files"
+        calens
+      if: matrix.check_changelog
 
 
   buildnpush:
@@ -182,33 +174,33 @@ jobs:
       GH_USERNAME: ${{ github.actor }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Get current date
-        id: date
-        run: |
-          export BASEVERSION=$(cat NETAPPVERSION)
-          echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
-          export VERSION=$BASEVERSION.${{ steps.date.outputs.date }}
-          echo "::set-output name=version::$VERSION"
-      - name: Check out code
-        uses: actions/checkout@v3
+    - name: Get current date
+      id: date
+      run: |
+        export BASEVERSION=$(cat NETAPPVERSION)
+        echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+        export VERSION=$BASEVERSION.${{ steps.date.outputs.date }}
+        echo "::set-output name=version::$VERSION"
+    - name: Check out code
+      uses: actions/checkout@v3
 
-      - name: Build image
-        run: docker build --build-arg BUILD_DATETIME=${{ steps.date.outputs.date }} -t netapp-restic:latest .
+    - name: Build image
+      run: docker build --build-arg BUILD_DATETIME=${{ steps.date.outputs.date }} -t netapp-restic:latest .
 
-      - name: Docker login
-        run: docker login -u $USERNAME -p $PASSWORD netappdownloads.jfrog.io/oss-docker-restic-production/restic
+    - name: Docker login
+      run: docker login -u $USERNAME -p $PASSWORD netappdownloads.jfrog.io/oss-docker-restic-production/restic
 
-      - name: Tag and push latest image
-        run: |
-          docker tag netapp-restic:latest netappdownloads.jfrog.io/oss-docker-restic-production/restic:latest
-          docker push netappdownloads.jfrog.io/oss-docker-restic-production/restic:latest
+    - name: Tag and push latest image
+      run: |
+        docker tag netapp-restic:latest netappdownloads.jfrog.io/oss-docker-restic-production/restic:latest
+        docker push netappdownloads.jfrog.io/oss-docker-restic-production/restic:latest
 
-      - name: Tag and push versioned image
-        run: |
-          export VERSION=$(cat NETAPPVERSION).${{ steps.date.outputs.date }}
-          echo "VERSION="$VERSION
-          docker tag netapp-restic:latest netappdownloads.jfrog.io/oss-docker-restic-production/restic:$VERSION
-          docker push netappdownloads.jfrog.io/oss-docker-restic-production/restic:$VERSION
+    - name: Tag and push versioned image
+      run: |
+        export VERSION=$(cat NETAPPVERSION).${{ steps.date.outputs.date }}
+        echo "VERSION="$VERSION
+        docker tag netapp-restic:latest netappdownloads.jfrog.io/oss-docker-restic-production/restic:$VERSION
+        docker push netappdownloads.jfrog.io/oss-docker-restic-production/restic:$VERSION
 
   buildnpushBetas:
     name: Build and Push Docker Package For Testing
@@ -225,30 +217,29 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       target_commitish: '{{ .Commit }}'
     steps:
-      - name: Get current date
-        id: date
-        run: | 
-          echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
-          export VERSION=$BASEVERSION.${{ steps.date.outputs.date }}
-          echo "::set-output name=version::$VERSION"
-      - name: Check out code
-        uses: actions/checkout@v2
+    - name: Get current date
+      id: date
+      run: |
+        echo "::set-output name=date::$(date +'%Y%m%d%H%M')"
+        export VERSION=$BASEVERSION.${{ steps.date.outputs.date }}
+        echo "::set-output name=version::$VERSION"
+    - name: Check out code
+      uses: actions/checkout@v2
 
-      - name: Build image
-        run: docker build --build-arg BUILD_DATETIME=${{ steps.date.outputs.date }} -t netapp-restic:latest .
+    - name: Build image
+      run: docker build --build-arg BUILD_DATETIME=${{ steps.date.outputs.date }} -t netapp-restic:latest .
 
-      - name: Docker login
-        run: |
-          docker login -u $USERNAME -p $PASSWORD netappdownloads.jfrog.io/oss-docker-restic-production/restic
-          docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+    - name: Docker login
+      run: |
+        docker login -u $USERNAME -p $PASSWORD netappdownloads.jfrog.io/oss-docker-restic-production/restic
+        docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
 
-      - name: Tag and push versioned image
-        run: |
-          export VERSION=$(cat NETAPPVERSION).${{ steps.date.outputs.date }}
-          echo "VERSION="$VERSION
-          docker tag netapp-restic:latest netappdownloads.jfrog.io/oss-docker-restic-production/restic:$VERSION-beta
-          docker tag netapp-restic:latest netapp/restic:$VERSION-beta
-          docker push netapp/restic:$VERSION-beta
+    - name: Tag and push versioned image
+      run: |
+        export VERSION=$(cat NETAPPVERSION).${{ steps.date.outputs.date }}
+        echo "VERSION="$VERSION
+        docker tag netapp-restic:latest netappdownloads.jfrog.io/oss-docker-restic-production/restic:$VERSION-beta
+        docker push netappdownloads.jfrog.io/oss-docker-restic-production/restic:$VERSION-beta
 #      - name: tag github
 #        id: github_tag
 #        uses: mathieudutour/github-tag-action@v6.1
