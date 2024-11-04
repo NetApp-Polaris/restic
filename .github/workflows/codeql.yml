@@ -13,7 +13,7 @@ name: "CodeQL"
 
 on:
   push:
-    branches: [ "netapp-main", "master" ]
+    branches: [ "netapp-main", "master", "codeql-24.10" ]
   pull_request:
     branches: [ "netapp-main", "master" ]
   schedule:
